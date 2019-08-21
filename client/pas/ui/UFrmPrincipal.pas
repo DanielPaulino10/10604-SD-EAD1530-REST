@@ -5,10 +5,13 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants,
   System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls;
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.ComCtrls;
 
 type
   TForm1 = class(TForm)
+    PageControl1: TPageControl;
+    TabSheet1: TTabSheet;
+    TabSheet2: TTabSheet;
     Label1: TLabel;
     Label2: TLabel;
     Label3: TLabel;
@@ -19,7 +22,18 @@ type
     mmRetornoWebService: TMemo;
     edtEnderecoBackend: TLabeledEdit;
     edtPortaBackend: TLabeledEdit;
+    edtDocumento: TLabeledEdit;
+    btnConsultar: TButton;
+    Label4: TLabel;
+    Label5: TLabel;
+    Label6: TLabel;
+    Label7: TLabel;
+    edtTempo: TEdit;
+    edtTotal: TEdit;
+    edtSabor: TEdit;
+    edtTamanho: TEdit;
     procedure Button1Click(Sender: TObject);
+    procedure btnConsultarClick(Sender: TObject);
   private
     { Private-Deklarationen }
   public
@@ -33,7 +47,7 @@ implementation
 
 uses
   Rest.JSON, MVCFramework.RESTClient, UEfetuarPedidoDTOImpl, System.Rtti,
-  UPizzaSaborEnum, UPizzaTamanhoEnum;
+  UPizzaSaborEnum, UPizzaTamanhoEnum, UPedidoRetornoDTOImpl;
 
 {$R *.dfm}
 
@@ -61,5 +75,44 @@ begin
     Clt.Free;
   end;
 end;
+
+procedure TForm1.btnConsultarClick(Sender: TObject);
+var
+  Clt: TRestClient;
+  Response: IRESTResponse;
+  oPedidoRetornoDTO: TPedidoRetornoDTO;
+begin
+ Clt := MVCFramework.RESTClient.TRestClient.Create(edtEnderecoBackend.Text,
+    StrToIntDef(edtPortaBackend.Text, 80), nil);
+    Clt.ReadTimeOut(60000);
+
+    edtTamanho.Clear;
+    edtSabor.Clear;
+    edtTotal.Clear;
+    edtTempo.Clear;
+  try
+    Response := Clt.doGET('/consultarPedido', [edtDocumento.Text]);
+    if Response.HasError then
+      begin
+      Showmessage(Response.BodyAsString());
+      Exit;
+    end;
+
+    oPedidoRetornoDTO := TJson.JsonToObject<TPedidoRetornoDTO>(Response.BodyAsString());
+    if oPedidoRetornoDTO.TempoPreparo < 0 then
+      Raise Exception.Create
+        ('Não existem pedidos para este número de documento!')
+    else
+    begin
+      edtTamanho.Text := Copy((TRttiEnumerationType.GetName<TPizzaTamanhoEnum>(oPedidoRetornoDTO.PizzaTamanho)),3);
+      edtSabor.Text   := Copy((TRttiEnumerationType.GetName<TPizzaSaborEnum>(oPedidoRetornoDTO.PizzaSabor)),3);
+      edtTotal.Text   := FormatFloat('#,##0.00', oPedidoRetornoDTO.ValorTotalPedido);
+      edtTempo.Text   := IntToStr(oPedidoRetornoDTO.TempoPreparo) + ' minutos';
+    end;
+  finally
+    Clt.Free;
+  end;
+end;
+
 
 end.
